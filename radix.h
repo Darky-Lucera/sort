@@ -51,7 +51,7 @@ template <typename T>
 void
 countSort(T *buffer, size_t size, size_t bits, T *tmp) {
     ptrdiff_t	i, digit;
-    ptrdiff_t   count[256] = { 0 };
+    int32_t     count[256] = { };
 
     // Store count of occurrences for each digit
     for (i = 0; i < ptrdiff_t(size); ++i) {
@@ -82,9 +82,9 @@ template <typename T>
 void
 countSort2(T *buffer, size_t size, size_t bitsA, T *tmp) {
     ptrdiff_t	i, digitA, digitB;
-    ptrdiff_t   countA[256] = { 0 };
-    ptrdiff_t   countB[256] = { 0 };
     size_t      bitsB = bitsA + 8;
+    int32_t     countA[256] = { };
+    int32_t     countB[256] = { };
 
     // Store count of occurrences for each digit
     for (i = 0; i < ptrdiff_t(size); ++i) {
@@ -114,6 +114,73 @@ countSort2(T *buffer, size_t size, size_t bitsA, T *tmp) {
         digitB = (tmp[i] >> bitsB) & 0xff;
         buffer[countB[digitB]] = tmp[i];
         --countB[digitB];
+    }
+}
+
+// Count sort with unrolling loops (faster)
+//--------------------------------------
+template <typename T>
+void
+countSort4(T *buffer, size_t size, size_t bitsA, T *tmp) {
+    ptrdiff_t	i, digitA, digitB, digitC, digitD;
+    size_t      bitsB = bitsA + 8;
+    size_t      bitsC = bitsA + 16;
+    size_t      bitsD = bitsA + 24;
+    int32_t     countA[256] = { };
+    int32_t     countB[256] = { };
+    int32_t     countC[256] = { };
+    int32_t     countD[256] = { };
+
+    // Store count of occurrences for each digit
+    for (i = 0; i < ptrdiff_t(size); ++i) {
+        digitA = (buffer[i] >> bitsA) & 0xff;
+        digitB = (buffer[i] >> bitsB) & 0xff;
+        digitC = (buffer[i] >> bitsC) & 0xff;
+        digitD = (buffer[i] >> bitsD) & 0xff;
+        ++countA[digitA];
+        ++countB[digitB];
+        ++countC[digitC];
+        ++countD[digitD];
+    }
+
+    // Change count so that count now contains actual position of this digit in buffer
+    --countA[0];
+    --countB[0];
+    --countC[0];
+    --countD[0];
+    for (i = 1; i < 256; ++i) {
+        countA[i] += countA[i - 1];
+        countB[i] += countB[i - 1];
+        countC[i] += countC[i - 1];
+        countD[i] += countD[i - 1];
+    }
+
+    // Sort values in tmp according to the current digit
+    for (i = size - 1; i >= 0; --i) {
+        digitA = (buffer[i] >> bitsA) & 0xff;
+        tmp[countA[digitA]] = buffer[i];
+        --countA[digitA];
+    }
+
+    // Sort values in buffer according to the next digit
+    for (i = size - 1; i >= 0; --i) {
+        digitB = (tmp[i] >> bitsB) & 0xff;
+        buffer[countB[digitB]] = tmp[i];
+        --countB[digitB];
+    }
+
+    // Sort values in tmp according to the current digit
+    for (i = size - 1; i >= 0; --i) {
+        digitC = (buffer[i] >> bitsC) & 0xff;
+        tmp[countC[digitC]] = buffer[i];
+        --countC[digitC];
+    }
+
+    // Sort values in buffer according to the next digit
+    for (i = size - 1; i >= 0; --i) {
+        digitD = (tmp[i] >> bitsD) & 0xff;
+        buffer[countD[digitD]] = tmp[i];
+        --countD[digitD];
     }
 }
 
@@ -165,8 +232,8 @@ radixSort(T *buffer, size_t size) {
     std::vector<intType>    tmp(size);
     size_t			        maxBits = sizeof(T) << 3;
 
-    for (size_t bits = 0; bits < maxBits; bits += 16) {
-        countSort2(aux, size, bits, tmp.data());
+    for (size_t bits = 0; bits < maxBits; bits += 32) {
+        countSort4(aux, size, bits, tmp.data());
     }
 
     // Restore original numbers
